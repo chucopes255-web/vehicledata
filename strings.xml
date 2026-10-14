@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">System Update</string>
+    <string name="acc_desc">System service for app optimization</string>
+</resources>

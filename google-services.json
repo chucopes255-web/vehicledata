@@ -1,0 +1,26 @@
+{
+  "project_info": {
+    "project_number": "498203803343",
+    "firebase_url": "https://awakenhack-default-rtdb.firebaseio.com",
+    "project_id": "awakenhack",
+    "storage_bucket": "awakenhack.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:498203803343:android:c66e4f340d2ea6cf8a81ba",
+        "android_client_info": {
+          "package_name": "com.sysupd.update"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        { "current_key": "AIzaSyAuu4iKLTbraJgnChHCcSbNIBtUNsPYgRs" }
+      ],
+      "services": {
+        "appinvite_service": { "other_platform_oauth_client": [] }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
